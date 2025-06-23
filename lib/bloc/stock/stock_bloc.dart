@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'package:flutter_assignment/services/mock_stock_api.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -88,61 +89,114 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     }
   }
 
+  Future<void> _connectWebSocket() async {
+    try {
+      developer.log('Connecting to WebSocket: ${AppApi.webSocketUrl}', name: 'StockBloc');
+      
+      _channel?.sink.close();
+      _channel = WebSocketChannel.connect(Uri.parse(AppApi.webSocketUrl));
+
+      // Subscribe to Nifty 50
+      _channel?.sink.add(AppApi.niftySubscription);
+      developer.log('Sent Nifty subscription', name: 'StockBloc');
+
+      // Subscribe to Sensex
+      _channel?.sink.add(AppApi.sensexSubscription);
+      developer.log('Sent Sensex subscription', name: 'StockBloc');
+
+      _channel!.stream.listen(
+        (data) {
+          if (!_isDisposed) {
+            developer.log('Received data: $data', name: 'StockBloc');
+            add(StockDataReceived(data));
+          }
+        },
+        onError: (error) {
+          developer.log('WebSocket error: $error', name: 'StockBloc');
+          if (!_isDisposed) {
+            add(StockErrorOccurred(error.toString()));
+          }
+        },
+        onDone: () {
+          developer.log('WebSocket connection closed', name: 'StockBloc');
+          if (!_isDisposed) {
+            _scheduleReconnect();
+          }
+        },
+      );
+    } catch (e) {
+      developer.log('Error connecting to WebSocket: $e', name: 'StockBloc');
+      if (!_isDisposed) {
+        add(StockErrorOccurred(e.toString()));
+        _scheduleReconnect();
+      }
+    }
+  }
+
   void _onStockDataReceived(
     StockDataReceived event,
     Emitter<StockState> emit,
   ) {
-    if (state is StockLoadSuccess) {
-      final currentState = state as StockLoadSuccess;
-      final data = event.data.toString().trim();
+    try {
+      if (state is StockLoadSuccess) {
+        final currentState = state as StockLoadSuccess;
+        final data = event.data.toString().trim();
 
-      // Skip if data is empty
-      if (data.isEmpty) {
-        return;
-      }
-
-      // Parse the data based on the format
-      final parts = data.split('|');
-      if (parts.length < 7) {
-        return;
-      }
-
-      // Extract the symbol and format it
-      final exchange = parts[0]; // NSEIDX or BSEIDX
-      final indexCode = parts[1]; // 26000 or 1
-      final symbol = '$exchange$indexCode';
-
-      // Extract price data
-      final ltp = parts[2];
-      final high = parts[3];
-      final low = parts[4];
-      final close = parts[5];
-      final open = parts[6];
-
-      // Calculate change and change percent
-      final currentPrice = double.tryParse(ltp) ?? 0.0;
-      final previousClose = double.tryParse(close) ?? 0.0;
-      final change = currentPrice - previousClose;
-      final changePercent =
-          previousClose != 0 ? (change / previousClose) * 100 : 0.0;
-
-      // Update the corresponding index
-      final updatedIndices = currentState.indices.map((index) {
-        if (index.symbol == symbol) {
-          return index.copyWith(
-            ltp: ltp,
-            change: change.toStringAsFixed(2),
-            changePercent: changePercent.toStringAsFixed(2),
-            open: open,
-            high: high,
-            low: low,
-            previousClose: close,
-          );
+        // Skip empty data
+        if (data.isEmpty) {
+          return;
         }
-        return index;
-      }).toList();
 
-      emit(currentState.copyWith(indices: updatedIndices));
+        // Parse the pipe-separated data
+        final parts = data.split('|');
+        if (parts.length < 7) {
+          developer.log('Invalid data format: $data', name: 'StockBloc');
+          return;
+        }
+
+        final exchange = parts[0]; // NSEIDX or BSEIDX
+        final currentValue = parts[2]; // Current index value
+        final high = parts[3];
+        final low = parts[4];
+        final open = parts[5];
+        final close = parts[6];
+        final percentChange = parts.length > 7 ? parts[7] : '0.0';
+
+        // Construct the symbol
+        String symbol;
+        if (exchange == 'NSEIDX') {
+          symbol = AppApi.niftySymbol;
+        } else if (exchange == 'BSEIDX') {
+          symbol = AppApi.sensexSymbol;
+        } else {
+          return;
+        }
+
+        // Calculate change
+        final currentPrice = double.tryParse(currentValue) ?? 0.0;
+        final previousClose = double.tryParse(close) ?? 0.0;
+        final change = currentPrice - previousClose;
+
+        // Update the corresponding index
+        final updatedIndices = currentState.indices.map((index) {
+          if (index.symbol == symbol) {
+            return index.copyWith(
+              ltp: currentValue,
+              change: change.toStringAsFixed(2),
+              changePercent: percentChange,
+              open: open,
+              high: high,
+              low: low,
+              previousClose: close,
+            );
+          }
+          return index;
+        }).toList();
+
+        emit(currentState.copyWith(indices: updatedIndices));
+      }
+    } catch (e) {
+      developer.log('Error processing stock data: $e', name: 'StockBloc');
     }
   }
 
@@ -168,43 +222,6 @@ class StockBloc extends Bloc<StockEvent, StockState> {
     Emitter<StockState> emit,
   ) {
     // Implementation of logout logic
-  }
-
-  Future<void> _connectWebSocket() async {
-    try {
-      _channel?.sink.close();
-      _channel = WebSocketChannel.connect(
-        Uri.parse(AppApi.webSocketUrl),
-      );
-
-      // Subscribe to Nifty 50
-      _channel?.sink.add('SUBSCRIBE|NSEIDX|26000');
-
-      // Subscribe to Sensex
-      _channel?.sink.add('SUBSCRIBE|BSEIDX|1');
-
-      _channel!.stream.listen(
-        (data) {
-          if (!_isDisposed) {
-            add(StockDataReceived(data));
-          }
-        },
-        onError: (error) {
-          if (!_isDisposed) {
-            add(StockErrorOccurred(error.toString()));
-          }
-        },
-        onDone: () {
-          if (!_isDisposed) {
-            _scheduleReconnect();
-          }
-        },
-      );
-    } catch (e) {
-      if (!_isDisposed) {
-        add(StockErrorOccurred(e.toString()));
-      }
-    }
   }
 
   void _scheduleReconnect() {

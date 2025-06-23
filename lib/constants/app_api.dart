@@ -2,9 +2,9 @@ class AppApi {
   // WebSocket URLs
   static const String webSocketUrl = 'wss://streamer.ysil.in/';
 
-  // WebSocket Actions
-  static const String subscribeAction = 'subscribe';
-  static const String freeFeedType = 'freefeed';
+  // WebSocket subscription messages
+  static const String niftySubscription = '{"action":"subscribe","type":"freefeed","symbols":["NSEIDX_26000"]}';
+  static const String sensexSubscription = '{"action":"subscribe","type":"freefeed","symbols":["BSEIDX_1"]}';
 
   // Stock Symbols
   static const String niftySymbol = 'NSEIDX_26000';

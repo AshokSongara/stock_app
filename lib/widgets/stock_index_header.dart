@@ -89,8 +89,6 @@ class StockIndexHeader extends StatelessWidget {
             stock.name,
             style: AppTextStyles.indexName,
           ),
-          SizedBox(height: 4.h),
-
           // LTP and Change
           Column(
             mainAxisAlignment: MainAxisAlignment.start,
@@ -105,26 +103,6 @@ class StockIndexHeader extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 8.h),
-
-          // Additional Info
-          // Row(
-          //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          //   children: [
-          //     _buildInfoColumn('Open', stock.open),
-          //     _buildInfoColumn('High', stock.high),
-          //     _buildInfoColumn('Low', stock.low),
-          //   ],
-          // ),
-          // SizedBox(height: 4.h),
-          // Row(
-          //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          //   children: [
-          //     _buildInfoColumn('52W H', stock.yearHigh),
-          //     _buildInfoColumn('52W L', stock.yearLow),
-          //     _buildInfoColumn('Moves', '${stock.upMoves}/${stock.downMoves}'),
-          //   ],
-          // ),
         ],
       ),
     );
